@@ -7,6 +7,10 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic-settings>=2.6",
+    "sqlalchemy>=2.1.8",
+    "alembic>=1.20.1",
+    "psycopg[binary]>=3.3.9",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
