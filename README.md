@@ -6,7 +6,8 @@ A web app built on Miami-Dade Transit's live data. It shows a live bus map, stor
 ping, and uses that history to measure reliability: ghost buses, lateness, bunching, and
 arrival ranges with confidence.
 
-**Status:** early scaffolding. Nothing below the health check is implemented yet.
+**Status:** early. The database schema and the static GTFS loader work; live ingestion and
+the map are not built yet.
 
 ## Stack
 
@@ -41,7 +42,23 @@ cp .env.example .env    # then set SWIFTLY_API_KEY and a Postgres password
 docker compose up --build
 ```
 
-The API answers at http://localhost:8000/health.
+The API answers at http://localhost:8000/health. Database migrations run automatically on
+startup (the `migrate` service).
+
+Load the static schedule (safe to re-run; an unchanged zip is skipped):
+
+```sh
+docker compose run --rm api python -m app.gtfs.loader
+```
+
+Run the tests inside a container, against the Compose database:
+
+```sh
+docker compose run --rm -v ./backend:/src -w /src \
+  -e UV_PROJECT_ENVIRONMENT=/tmp/venv -e UV_LINK_MODE=copy \
+  -e TEST_ADMIN_DSN=postgresql://ghostbus:change-me@db:5432/ghostbus \
+  api uv run pytest
+```
 
 ## Develop the backend without Docker
 

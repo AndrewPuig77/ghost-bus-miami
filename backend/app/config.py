@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     database_url: str = ""
     redis_url: str = "redis://redis:6379/0"
 
+    @property
+    def psycopg_dsn(self) -> str:
+        """DATABASE_URL without the SQLAlchemy driver suffix, for direct psycopg use."""
+        return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
 
 @lru_cache
 def get_settings() -> Settings:
