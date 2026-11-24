@@ -1,12 +1,16 @@
 services:
   db:
-    image: postgis/postgis:17-3.5
+    build: ./db
+    # shared_buffers: Postgres's own cache. Small by default; set PG_SHARED_BUFFERS on a server
+    # (about 25% of RAM is the usual guidance).
+    command: postgres -c shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +21,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -38,6 +43,7 @@ services:
     build: ./backend
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000
     env_file: .env
+    restart: unless-stopped
     ports:
       - "8000:8000"
     depends_on:
@@ -50,6 +56,8 @@ services:
     build: ./backend
     command: python -m app.worker.main
     env_file: .env
+    # Must run 24/7: restart after crashes and after Docker or the machine restarts.
+    restart: unless-stopped
     depends_on:
       migrate:
         condition: service_completed_successfully

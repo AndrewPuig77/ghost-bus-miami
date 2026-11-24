@@ -188,6 +188,12 @@ def load_gtfs(zip_bytes: bytes, source_url: str, dsn: str) -> int | None:
         return feed_version_id
 
 
+def download(url: str = GTFS_URL) -> bytes:
+    response = httpx.get(url, follow_redirects=True, timeout=120)
+    response.raise_for_status()
+    return response.content
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load static GTFS into Postgres")
     parser.add_argument("--url", default=GTFS_URL, help="GTFS zip URL")
@@ -199,9 +205,7 @@ def main() -> None:
         zip_bytes, source = args.file.read_bytes(), str(args.file)
     else:
         log.info("downloading %s", args.url)
-        response = httpx.get(args.url, follow_redirects=True, timeout=120)
-        response.raise_for_status()
-        zip_bytes, source = response.content, args.url
+        zip_bytes, source = download(args.url), args.url
 
     load_gtfs(zip_bytes, source, get_settings().psycopg_dsn)
 
