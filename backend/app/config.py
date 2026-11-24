@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     gtfs_refresh_interval_s: float = 24 * 3600
     raw_retention_days: int = 3
 
+    # API: vehicles not heard from in this long are left off the map.
+    vehicle_max_age_s: int = 1800
+
     @property
     def psycopg_dsn(self) -> str:
         """DATABASE_URL without the SQLAlchemy driver suffix, for direct psycopg use."""

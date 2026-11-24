@@ -44,8 +44,9 @@ services:
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000
     env_file: .env
     restart: unless-stopped
+    # Local access only; browsers reach the API through the web service.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -64,7 +65,19 @@ services:
       redis:
         condition: service_healthy
 
-  # frontend service is added in build step 4 (live map)
+  # The built map app behind Caddy, which also forwards /api and /ws to the API.
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - api
 
 volumes:
   pgdata:
+  caddy_data:

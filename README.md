@@ -6,8 +6,9 @@ A web app built on Miami-Dade Transit's live data. It shows a live bus map, stor
 ping, and uses that history to measure reliability: ghost buses, lateness, bunching, and
 arrival ranges with confidence.
 
-**Status:** early. The ingestion worker records live data and the static schedule; the map
-and the reliability analysis are not built yet.
+**Status:** early. The ingestion worker records live data and the static schedule, and the
+live map shows every bus with how fresh its position is. The reliability analysis is not
+built yet.
 
 ## How ingestion works
 
@@ -28,7 +29,7 @@ logged to `ingest_runs`.
 
 - **Backend:** Python 3.13, FastAPI, an asyncio ingestion worker
 - **Data:** PostgreSQL + PostGIS (history), Redis (live cache and pub/sub)
-- **Frontend:** React + TypeScript + Vite + Leaflet (not started)
+- **Frontend:** React + TypeScript + Vite + Leaflet, served by Caddy
 - **Sources:** Swiftly GTFS-realtime feeds, Miami-Dade static GTFS
 
 ## Layout
@@ -65,8 +66,8 @@ cp .env.example .env    # then set SWIFTLY_API_KEY and a Postgres password
 docker compose up --build
 ```
 
-The API answers at http://localhost:8000/health. Database migrations run automatically on
-startup (the `migrate` service).
+The map is at http://localhost:8080 and the API at http://localhost:8000/health. Database
+migrations run automatically on startup (the `migrate` service).
 
 Load the static schedule (safe to re-run; an unchanged zip is skipped):
 
@@ -74,14 +75,26 @@ Load the static schedule (safe to re-run; an unchanged zip is skipped):
 docker compose run --rm api python -m app.gtfs.loader
 ```
 
-Run the tests inside a container, against the Compose database:
+Run the tests inside a container, against the Compose database and Redis (tests use a
+scratch database and Redis db 15):
 
 ```sh
 docker compose run --rm -v ./backend:/src -w /src \
   -e UV_PROJECT_ENVIRONMENT=/tmp/venv -e UV_LINK_MODE=copy \
   -e TEST_ADMIN_DSN=postgresql://ghostbus:change-me@db:5432/ghostbus \
+  -e TEST_REDIS_URL=redis://redis:6379/15 \
   api uv run pytest
 ```
+
+## API
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/vehicles` | Every bus heard from in the last 30 minutes, with `server_time` |
+| `WS /ws/vehicles` | A snapshot on connect, then each poll's moved buses as they arrive |
+| `GET /api/status` | Last attempt, success and error for each Swiftly feed |
+| `GET /api/routes` | Routes from the active schedule, in number order |
+| `GET /api/routes/{id}/shapes` | GeoJSON of every path the route's trips follow |
 
 ## Develop the backend without Docker
 
@@ -93,4 +106,15 @@ uv sync
 uv run pytest
 uv run ruff check .
 uv run uvicorn app.api.main:app --reload
+```
+
+## Develop the frontend
+
+Requires Node 22+. With the Compose stack running, Vite serves the app with hot reload and
+forwards `/api` and `/ws` to the API on port 8000:
+
+```sh
+cd frontend
+npm install
+npm run dev    # http://localhost:5173
 ```

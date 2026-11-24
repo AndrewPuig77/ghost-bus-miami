@@ -31,17 +31,33 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
-      # The same Postgres + PostGIS image the app runs on, built from db/Dockerfile.
-      - name: Start database
+      # The same Postgres + PostGIS image the app runs on (db/Dockerfile), and Redis.
+      - name: Start database and Redis
         working-directory: .
         run: |
           cp .env.example .env
-          docker compose up -d --wait db
+          docker compose up -d --wait db redis
 
       - name: Test
         env:
           TEST_ADMIN_DSN: postgresql://ghostbus:change-me@localhost:5432/ghostbus
         run: uv run pytest -v
+
+  frontend:
+    name: Frontend type-check and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
 
   images:
     name: Build images
