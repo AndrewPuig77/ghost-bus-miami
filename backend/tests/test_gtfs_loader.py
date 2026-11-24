@@ -1,23 +1,15 @@
 """Integration test: migrate a scratch database, load a tiny GTFS zip, check the rows.
 
-Needs the Compose Postgres running on localhost:5432; skipped otherwise.
+Uses the scratch database from conftest.py (skipped when Postgres is unreachable).
 """
 
 import io
-import os
 import zipfile
 
 import psycopg
 import pytest
-from alembic import command
-from alembic.config import Config
 
 from app.gtfs.loader import load_gtfs
-
-ADMIN_DSN = os.environ.get(
-    "TEST_ADMIN_DSN", "postgresql://ghostbus:change-me@localhost:5432/ghostbus"
-)
-TEST_DB = "ghostbus_test"
 
 FILES = {
     # BOM, CRLF line endings and space-padded times mirror the real Miami-Dade feed.
@@ -43,30 +35,6 @@ def make_zip(files: dict[str, str]) -> bytes:
         for name, text in files.items():
             archive.writestr(name, text.encode("utf-8"))
     return buffer.getvalue()
-
-
-@pytest.fixture(scope="module")
-def dsn():
-    try:
-        admin = psycopg.connect(ADMIN_DSN, autocommit=True, connect_timeout=3)
-    except psycopg.OperationalError:
-        pytest.skip("Postgres is not reachable on localhost:5432")
-    admin.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
-    admin.execute(f"CREATE DATABASE {TEST_DB}")
-
-    test_dsn = ADMIN_DSN.rsplit("/", 1)[0] + f"/{TEST_DB}"
-    previous = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = test_dsn.replace("postgresql://", "postgresql+psycopg://", 1)
-    try:
-        command.upgrade(Config("alembic.ini"), "head")
-        yield test_dsn
-    finally:
-        if previous is None:
-            del os.environ["DATABASE_URL"]
-        else:
-            os.environ["DATABASE_URL"] = previous
-        admin.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
-        admin.close()
 
 
 def one(dsn: str, query: str):

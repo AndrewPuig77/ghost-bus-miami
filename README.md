@@ -6,8 +6,23 @@ A web app built on Miami-Dade Transit's live data. It shows a live bus map, stor
 ping, and uses that history to measure reliability: ghost buses, lateness, bunching, and
 arrival ranges with confidence.
 
-**Status:** early. The database schema and the static GTFS loader work; live ingestion and
-the map are not built yet.
+**Status:** early. The ingestion worker records live data and the static schedule; the map
+and the reliability analysis are not built yet.
+
+## How ingestion works
+
+The `worker` service runs three loops:
+
+- **Vehicle positions** every 15s: each GPS ping goes to Postgres (`vehicle_positions`,
+  partitioned by day; a repeated GPS timestamp is skipped). Vehicles that moved are written to
+  Redis (`vehicles:latest`) and announced on the `vehicles:updates` channel.
+- **Trip updates** every 30s: each trip's status (scheduled, canceled, added) goes to
+  `trip_status`. The raw feed is kept gzipped in `trip_update_raw` for 3 days.
+- **Static schedule** once a day: a changed GTFS zip becomes a new active feed version.
+
+Every Swiftly request goes through one rolling budget of 150 requests per 15 minutes (Swiftly
+allows 180). Failures back off exponentially, a 429 pauses all requests, and every poll is
+logged to `ingest_runs`.
 
 ## Stack
 
@@ -30,8 +45,16 @@ backend/
   migrations/    database migrations
   tests/
 frontend/        React app
+db/              Postgres + PostGIS image (x86 and ARM)
+infra/           Terraform for Oracle Cloud
+.github/         CI and deploy workflows
 docker-compose.yml
 ```
+
+## Deployment
+
+Production runs on an Oracle Cloud Always Free ARM server, created with Terraform and
+deployed by GitHub Actions after CI passes. See [infra/README.md](infra/README.md).
 
 ## Run it
 
