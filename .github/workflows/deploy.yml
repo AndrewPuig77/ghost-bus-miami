@@ -1,0 +1,70 @@
+name: Deploy
+
+# Runs after CI passes on main (or by hand). Copies the code to the server and rebuilds
+# the containers there, so images are built natively on the ARM server.
+#
+# Setup (GitHub repo -> Settings -> Secrets and variables -> Actions):
+#   variable  DEPLOY_ENABLED   true
+#   secret    DEPLOY_HOST      server public IP (terraform output public_ip)
+#   secret    DEPLOY_SSH_KEY   private key matching the server's authorized key
+#   secret    PROD_ENV         full contents of the server's .env file
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For workflow_run, deploy exactly the commit CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          printf 'Host app\n  HostName %s\n  User ubuntu\n  IdentityFile ~/.ssh/id_deploy\n' \
+            "$DEPLOY_HOST" > ~/.ssh/config
+
+      - name: Copy code and environment
+        env:
+          PROD_ENV: ${{ secrets.PROD_ENV }}
+        run: |
+          rsync -az --delete \
+            --exclude .git --exclude .env --exclude '.venv' --exclude node_modules \
+            --exclude 'infra/terraform/.terraform' --exclude '*.tfstate*' --exclude '*.tfvars' \
+            ./ app:/opt/ghostbus/
+          printf '%s\n' "$PROD_ENV" | ssh app 'umask 077 && cat > /opt/ghostbus/.env'
+
+      - name: Rebuild and restart
+        run: |
+          ssh app 'cd /opt/ghostbus && docker compose up -d --build --remove-orphans \
+            && docker image prune -f'
+
+      - name: Check the API is healthy
+        run: |
+          for _ in $(seq 1 20); do
+            if ssh app 'curl -fsS http://localhost:8000/health'; then exit 0; fi
+            sleep 5
+          done
+          ssh app 'cd /opt/ghostbus && docker compose ps && docker compose logs --tail 50'
+          exit 1

@@ -22,3 +22,16 @@ data/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+tfplan
+crash.log
+
+# Keys, wherever they end up
+*.pem
+*.key
