@@ -60,10 +60,11 @@ jobs:
           ssh app 'cd /opt/ghostbus && docker compose up -d --build --remove-orphans \
             && docker image prune -f'
 
-      - name: Check the API is healthy
+      # Through Caddy on port 80, so this checks the web server and the API together.
+      - name: Check the site is healthy
         run: |
           for _ in $(seq 1 20); do
-            if ssh app 'curl -fsS http://localhost:8000/health'; then exit 0; fi
+            if ssh app 'curl -fsS http://localhost/health'; then exit 0; fi
             sleep 5
           done
           ssh app 'cd /opt/ghostbus && docker compose ps && docker compose logs --tail 50'

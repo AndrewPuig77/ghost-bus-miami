@@ -12,7 +12,8 @@ GitHub push ─► CI (lint, tests on PostGIS, image build, terraform validate)
                                                   ├─ db (Postgres + PostGIS)
                                                   ├─ redis
                                                   ├─ worker (polls Swiftly 24/7)
-                                                  └─ api
+                                                  ├─ api
+                                                  └─ web (Caddy: the map app, proxies /api and /ws)
 ```
 
 ## What Terraform creates (`terraform/`)
@@ -54,7 +55,7 @@ GitHub push ─► CI (lint, tests on PostGIS, image build, terraform validate)
    | Variable | `DEPLOY_ENABLED` | `true` |
    | Secret | `DEPLOY_HOST` | output of `terraform output -raw public_ip` |
    | Secret | `DEPLOY_SSH_KEY` | contents of `~/.ssh/ghostbus` (the private key) |
-   | Secret | `PROD_ENV` | the server's `.env`: your Swiftly key, a strong Postgres password (also inside `DATABASE_URL`), and `PG_SHARED_BUFFERS=3GB` |
+   | Secret | `PROD_ENV` | the server's `.env`: your Swiftly key, a strong Postgres password (also inside `DATABASE_URL`), `PG_SHARED_BUFFERS=3GB` and `WEB_PORT=80` |
 
    Then run the **Deploy** workflow from the Actions tab, or push to `main`.
 

@@ -9,6 +9,7 @@ import os
 
 import psycopg
 import pytest
+import redis
 from alembic import command
 from alembic.config import Config
 
@@ -40,6 +41,20 @@ def dsn():
             os.environ["DATABASE_URL"] = previous
         admin.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
         admin.close()
+
+
+@pytest.fixture
+def redis_url():
+    """An emptied scratch Redis database (db 15 by default, or TEST_REDIS_URL)."""
+    url = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
+    client = redis.Redis.from_url(url, socket_connect_timeout=3)
+    try:
+        client.flushdb()
+    except redis.ConnectionError:
+        pytest.skip("Redis is not reachable")
+    yield url
+    client.flushdb()
+    client.close()
 
 
 @pytest.fixture
